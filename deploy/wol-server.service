@@ -1,0 +1,41 @@
+[Unit]
+Description=Wake-on-LAN Management Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 运行用户：需对数据目录 /var/local/wol 有读写权限（由 install.sh 创建并授权）
+User=wol
+Group=wol
+
+# 工作目录（JSON 数据文件所在目录）
+WorkingDirectory=/var/local/wol
+
+# 二进制位置：/usr/local/bin（由 install.sh 安装）
+ExecStart=/usr/local/bin/wol-server
+
+# 监听端口：默认从数据文件 /var/local/wol/wol.json 的 server.listen 读取（默认 :25352）
+# 如需强制覆盖（优先级高于数据文件），取消下一行注释并修改
+# Environment=WOOL_LISTEN_ADDR=:25352
+# JSON 数据文件位置（也可用绝对路径）
+Environment=WOOL_DATA_PATH=/var/local/wol/wol.json
+# JWT 密钥：不设置时会在数据文件 server.jwt_secret 中自动生成并持久化（推荐方式）
+# 如需显式指定（优先级高于数据文件），取消下一行注释并修改
+# Environment=WOOL_JWT_SECRET=change-me-to-a-long-random-secret
+# 首次创建的默认管理员（可选；创建后建议删掉这两行）
+Environment=WOOL_DEFAULT_ADMIN=admin
+Environment=WOOL_DEFAULT_PASSWORD=admin123
+
+# 重启策略
+Restart=on-failure
+RestartSec=3
+
+# 安全加固（按需开启）
+# NoNewPrivileges=true
+# ProtectSystem=strict
+# ReadWritePaths=/var/local/wol
+# PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

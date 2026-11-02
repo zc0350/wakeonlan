@@ -1,0 +1,18 @@
+# 编译产物
+wol-server
+wol-server.exe
+
+# 数据文件（运行时生成）
+*.db
+*.db-wal
+*.db-shm
+wol.json
+wol.json.tmp
+wol.json.bak
+
+# 日志
+*.log
+
+# 临时文件
+_*
+deploy/wol-server

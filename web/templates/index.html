@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wake-on-LAN 管理后台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">⚡ Wake-on-LAN 管理后台</div>
+    <div class="user">
+      当前管理员：<b id="curUser">--</b>
+      <button class="btn btn-sm" id="btnMyPwd" style="margin-left:8px">修改密码</button>
+      <button class="btn btn-sm" id="btnLogout" style="margin-left:4px">退出</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-tab="devices">设备管理</div>
+      <div class="tab" data-tab="admins">管理员管理</div>
+    </div>
+
+    <!-- 设备管理 -->
+    <section id="tab-devices">
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btnAddDevice">+ 添加设备</button>
+        <button class="btn" id="btnScanLAN">扫描局域网</button>
+        <button class="btn" id="btnWakeSelected">批量唤醒选中</button>
+        <button class="btn" id="btnRefreshDevices">刷新</button>
+        <span id="devCount" style="color:var(--muted);align-self:center;"></span>
+      </div>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" id="checkAll"></th>
+              <th>设备名称</th>
+              <th>MAC 地址</th>
+              <th>广播地址</th>
+              <th>备注</th>
+              <th style="width:220px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="deviceBody"></tbody>
+        </table>
+        <div class="empty" id="deviceEmpty" style="display:none">暂无设备，点击「添加设备」开始。</div>
+      </div>
+    </section>
+
+    <!-- 管理员管理 -->
+    <section id="tab-admins" style="display:none">
+      <div class="toolbar">
+        <button class="btn btn-primary" id="btnAddAdmin">+ 添加管理员</button>
+        <button class="btn" id="btnRefreshAdmins">刷新</button>
+      </div>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr><th>用户名</th><th>创建时间</th><th style="width:200px">操作</th></tr>
+          </thead>
+          <tbody id="adminBody"></tbody>
+        </table>
+        <div class="empty" id="adminEmpty" style="display:none">暂无其他管理员。</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 设备编辑模态框 -->
+  <div class="modal-mask" id="deviceModal">
+    <div class="modal">
+      <h3 id="deviceModalTitle">添加设备</h3>
+      <input type="hidden" id="deviceId">
+      <div class="field">
+        <label>设备名称 *</label>
+        <input type="text" id="dName" placeholder="例如：客厅电脑">
+      </div>
+      <div class="field">
+        <label>MAC 地址 *</label>
+        <input type="text" id="dMac" placeholder="例如：00:11:22:33:44:55" class="mono">
+      </div>
+      <div class="field">
+        <label>广播地址</label>
+        <input type="text" id="dBroadcast" placeholder="255.255.255.255" class="mono" value="255.255.255.255">
+      </div>
+      <div class="field">
+        <label>备注</label>
+        <textarea id="dNotes" rows="2" placeholder="可选"></textarea>
+      </div>
+      <div id="deviceErr" style="color:var(--danger);font-size:13px;"></div>
+      <div class="modal-actions">
+        <button class="btn" data-close="deviceModal">取消</button>
+        <button class="btn btn-primary" id="btnSaveDevice">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加管理员模态框 -->
+  <div class="modal-mask" id="adminModal">
+    <div class="modal">
+      <h3>添加管理员</h3>
+      <div class="field">
+        <label>用户名 *</label>
+        <input type="text" id="aName" placeholder="登录用户名">
+      </div>
+      <div class="field">
+        <label>密码 *（至少 6 位）</label>
+        <input type="password" id="aPassword" placeholder="初始密码">
+      </div>
+      <div id="adminErr" style="color:var(--danger);font-size:13px;"></div>
+      <div class="modal-actions">
+        <button class="btn" data-close="adminModal">取消</button>
+        <button class="btn btn-primary" id="btnSaveAdmin">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 重置他人密码模态框 -->
+  <div class="modal-mask" id="resetModal">
+    <div class="modal">
+      <h3>重置密码：<span id="resetName"></span></h3>
+      <input type="hidden" id="resetId">
+      <div class="field">
+        <label>新密码 *（至少 6 位）</label>
+        <input type="password" id="resetPassword" placeholder="新密码">
+      </div>
+      <div id="resetErr" style="color:var(--danger);font-size:13px;"></div>
+      <div class="modal-actions">
+        <button class="btn" data-close="resetModal">取消</button>
+        <button class="btn btn-primary" id="btnSaveReset">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改自己密码模态框 -->
+  <div class="modal-mask" id="myPwdModal">
+    <div class="modal">
+      <h3>修改我的密码</h3>
+      <div class="field">
+        <label>原密码 *</label>
+        <input type="password" id="oldPwd" placeholder="当前密码">
+      </div>
+      <div class="field">
+        <label>新密码 *（至少 6 位）</label>
+        <input type="password" id="newPwd" placeholder="新密码">
+      </div>
+      <div id="myPwdErr" style="color:var(--danger);font-size:13px;"></div>
+      <div class="modal-actions">
+        <button class="btn" data-close="myPwdModal">取消</button>
+        <button class="btn btn-primary" id="btnSaveMyPwd">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 局域网扫描模态框 -->
+  <div class="modal-mask" id="scanModal">
+    <div class="modal" style="width:92%;max-width:680px;">
+      <h3>扫描局域网</h3>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" id="scanCidr" class="mono" style="flex:1;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;" placeholder="网段（留空自动检测），如 192.168.1.0/24">
+        <button class="btn btn-primary" id="btnDoScan">重新扫描</button>
+      </div>
+      <div id="scanStatus" style="color:var(--muted);font-size:13px;min-height:18px;margin-bottom:8px;"></div>
+      <div class="panel" style="max-height:320px;overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" id="scanCheckAll"></th>
+              <th>IP 地址</th>
+              <th>MAC 地址</th>
+              <th>主机名</th>
+            </tr>
+          </thead>
+          <tbody id="scanBody"></tbody>
+        </table>
+        <div class="empty" id="scanEmpty" style="display:none">未发现设备。请确认网段是否正确，目标设备需与服务器在同一广播域。</div>
+      </div>
+      <div id="scanErr" style="color:var(--danger);font-size:13px;margin-top:8px;"></div>
+      <div class="modal-actions">
+        <button class="btn" data-close="scanModal">取消</button>
+        <button class="btn btn-primary" id="btnAddScanned" disabled>添加选中设备</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
