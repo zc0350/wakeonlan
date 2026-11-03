@@ -14,6 +14,7 @@ import (
 
 	"wol/internal/config"
 	"wol/internal/model"
+	"wol/internal/wol"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,6 +31,10 @@ type ServerConfig struct {
 	Listen string `json:"listen"`
 	// JWTSecret 是登录令牌的签名密钥；为空时会在启动时自动生成并写回本文件。
 	JWTSecret string `json:"jwt_secret,omitempty"`
+	// WakeAttempts 是每台设备唤醒魔术包的发送次数；缺省/非法值会在启动时补写为默认值 3。
+	WakeAttempts int `json:"wake_attempts"`
+	// WakeIntervalMS 是两次唤醒包之间的间隔（毫秒）；缺省/非法值会在启动时补写为默认值 100。
+	WakeIntervalMS int `json:"wake_interval_ms"`
 }
 
 // fileData 是 JSON 数据文件的顶层结构。
@@ -85,6 +90,17 @@ func Open(cfg *config.Config) (*Store, error) {
 		needSave = true
 	}
 
+	// 补写唤醒发包配置，让次数/间隔在数据文件中可见、可手工修改。
+	// 0 或负值视为未配置；启动时统一补写为默认值。
+	if s.data.Server.WakeAttempts <= 0 {
+		s.data.Server.WakeAttempts = wol.DefaultAttempts
+		needSave = true
+	}
+	if s.data.Server.WakeIntervalMS <= 0 {
+		s.data.Server.WakeIntervalMS = int(wol.DefaultInterval / time.Millisecond)
+		needSave = true
+	}
+
 	// JWT 密钥：环境变量未提供且文件中没有时，生成随机密钥并持久化，
 	// 保证密钥跨重启稳定（重启后已登录用户无需重新登录）。
 	if cfg.JWTSecret == "" && s.data.Server.JWTSecret == "" {
@@ -132,6 +148,23 @@ func (s *Store) JWTSecret() string {
 		return ""
 	}
 	return s.data.Server.JWTSecret
+}
+
+// WakeConfig 返回唤醒发包配置（发送次数与间隔毫秒）。
+// 文件中缺省/非法（<=0）的值回退为默认值；上限防呆由 wol.Options 统一处理。
+func (s *Store) WakeConfig() (attempts int, intervalMS int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	attempts = s.data.Server.WakeAttempts
+	if attempts <= 0 {
+		attempts = wol.DefaultAttempts
+	}
+	intervalMS = s.data.Server.WakeIntervalMS
+	if intervalMS <= 0 {
+		intervalMS = int(wol.DefaultInterval / time.Millisecond)
+	}
+	return attempts, intervalMS
 }
 
 // generateSecret 生成 64 字符的十六进制随机串，用作 JWT 签名密钥。

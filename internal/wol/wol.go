@@ -14,9 +14,50 @@ const DefaultBroadcast = "255.255.255.255"
 // DefaultPort 是 Wake-on-LAN 使用的 UDP 端口（9 为常用端口，部分设备也用 7）。
 const DefaultPort = 9
 
+// DefaultAttempts 是未配置时每台设备唤醒包的发送次数。
+const DefaultAttempts = 3
+
+// DefaultInterval 是两次发送之间的默认间隔。
+const DefaultInterval = 100 * time.Millisecond
+
+// maxAttempts 是发送次数的防呆上限，避免误配置导致长时间阻塞。
+const maxAttempts = 20
+
+// maxInterval 是发送间隔的防呆上限。
+const maxInterval = 5 * time.Second
+
+// Options 控制魔术包的发送行为。零值/非法字段自动回退到包级默认值。
+type Options struct {
+	// Attempts 是魔术包发送次数；<=0 时使用 DefaultAttempts，超过 20 按 20 处理。
+	Attempts int
+	// Interval 是两次发送之间的间隔；<0 时使用 DefaultInterval，超过 5s 按 5s 处理。
+	Interval time.Duration
+}
+
+func (o Options) attempts() int {
+	if o.Attempts <= 0 {
+		return DefaultAttempts
+	}
+	if o.Attempts > maxAttempts {
+		return maxAttempts
+	}
+	return o.Attempts
+}
+
+func (o Options) interval() time.Duration {
+	switch {
+	case o.Interval < 0:
+		return DefaultInterval
+	case o.Interval > maxInterval:
+		return maxInterval
+	default:
+		return o.Interval
+	}
+}
+
 // Wake 向指定广播地址发送目标 MAC 的唤醒魔术包。
-// 为保证可靠性，会连续发送若干次。
-func Wake(macStr, broadcast string) error {
+// 为保证可靠性，会按 opts 配置连续发送若干次。
+func Wake(macStr, broadcast string, opts Options) error {
 	mac, err := net.ParseMAC(strings.TrimSpace(macStr))
 	if err != nil {
 		return fmt.Errorf("invalid MAC address %q: %w", macStr, err)
@@ -49,7 +90,8 @@ func Wake(macStr, broadcast string) error {
 		})
 	}
 
-	const attempts = 3
+	attempts := opts.attempts()
+	interval := opts.interval()
 	var lastErr error
 	for i := 0; i < attempts; i++ {
 		if _, err := conn.Write(packet); err != nil {
@@ -58,7 +100,10 @@ func Wake(macStr, broadcast string) error {
 			continue
 		}
 		lastErr = nil
-		time.Sleep(100 * time.Millisecond)
+		// 最后一发之后无需再等待。
+		if i < attempts-1 {
+			time.Sleep(interval)
+		}
 	}
 	if lastErr != nil {
 		return fmt.Errorf("send magic packet: %w", lastErr)

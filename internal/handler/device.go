@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"wol/internal/db"
 	"wol/internal/model"
@@ -148,7 +149,7 @@ func (h *Handler) wakeDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res := wakeResult{ID: d.ID, Name: d.Name, MAC: d.MAC}
-	if err := wol.Wake(d.MAC, d.Broadcast); err != nil {
+	if err := wol.Wake(d.MAC, d.Broadcast, h.wakeOptions()); err != nil {
 		res.Error = err.Error()
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -176,10 +177,19 @@ func (h *Handler) wakeDevices(w http.ResponseWriter, r *http.Request) {
 	results := make([]wakeResult, 0, len(devices))
 	for _, d := range devices {
 		res := wakeResult{ID: d.ID, Name: d.Name, MAC: d.MAC}
-		if err := wol.Wake(d.MAC, d.Broadcast); err != nil {
+		if err := wol.Wake(d.MAC, d.Broadcast, h.wakeOptions()); err != nil {
 			res.Error = err.Error()
 		}
 		results = append(results, res)
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"results": results})
+}
+
+// wakeOptions 从数据文件的 server 配置段读取唤醒发包参数。
+func (h *Handler) wakeOptions() wol.Options {
+	attempts, intervalMS := h.store.WakeConfig()
+	return wol.Options{
+		Attempts: attempts,
+		Interval: time.Duration(intervalMS) * time.Millisecond,
+	}
 }
