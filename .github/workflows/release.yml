@@ -1,0 +1,81 @@
+# 发版工作流：推送 v* 标签时自动交叉编译多平台二进制，
+# 打包后创建 GitHub Release 并附 SHA256 校验和。
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # 创建 Release 需要
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+            archive: tar.gz
+          - goos: linux
+            goarch: arm64
+            ext: ""
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          NAME=wol-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          go build -trimpath -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o "${NAME}${{ matrix.ext }}" .
+
+      - name: Package
+        shell: bash
+        run: |
+          NAME=wol-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            zip "${NAME}.zip" "${NAME}${{ matrix.ext }}"
+          else
+            tar czf "${NAME}.tar.gz" "${NAME}${{ matrix.ext }}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: wol-server-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum wol-server-* > SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true

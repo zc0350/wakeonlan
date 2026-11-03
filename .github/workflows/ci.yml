@@ -1,0 +1,24 @@
+# 持续集成：每次推送/PR 自动做 vet 与编译检查，尽早发现问题。
+name: ci
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...

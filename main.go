@@ -14,9 +14,13 @@ import (
 //go:embed web/templates/*.html web/static/*
 var webFS embed.FS
 
+// version 是程序版本号；正式发布时由 CI 通过 -ldflags "-X main.version=..." 注入。
+var version = "dev"
+
 func main() {
 	cfg := config.Load()
 
+	log.Printf("Wake-on-LAN 管理后台 %s", version)
 	log.Printf("数据文件(JSON): %s", cfg.DBPath)
 	log.Printf("默认管理员账号: %s / %s (首次启动创建，请尽快修改密码)",
 		cfg.DefaultAdmin, cfg.DefaultPassword)
